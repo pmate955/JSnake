@@ -5,6 +5,7 @@ import java.awt.event.KeyEvent;
 import java.awt.event.KeyListener;
 import java.util.concurrent.ThreadLocalRandom;
 
+import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 
 public class SnakeMap extends JPanel implements KeyListener, Runnable{
@@ -22,6 +23,7 @@ public class SnakeMap extends JPanel implements KeyListener, Runnable{
      public boolean isRunning = true;
      public Thread gameThread;
      public int score;
+     public boolean isPaused = false;
      
      public SnakeMap(int size){
     	 this.size = size;
@@ -55,7 +57,7 @@ public class SnakeMap extends JPanel implements KeyListener, Runnable{
     	 			}
     	 		}
     	 	}
-    	 	g.setColor(Color.BLACK);
+    	 	g.setColor(Color.GRAY);
             for (int i=0; i<=size; i++) {
                 g.drawLine(((i*pointSize)+pointSize), pointSize, (i*pointSize)+pointSize, pointSize + (pointSize*size));
             }
@@ -86,7 +88,7 @@ public class SnakeMap extends JPanel implements KeyListener, Runnable{
     		 if(head.x<size-1){
     			 head.x++;
     		 } else {
-    			 head.x = size-1;
+    			 head.x = 0;
     		 }
     	 } else if(direction == 3){						//Go down
     		 if(head.y<size-1){
@@ -101,7 +103,16 @@ public class SnakeMap extends JPanel implements KeyListener, Runnable{
     			 head.x = size-1;
     		 }
     	 }
-    	 if(map[head.x][head.y]==10) eatSth = true;
+    	 if(map[head.x][head.y]==10) eatSth = true;			//Found food
+    	 else if(map[head.x][head.y] != 0) {				//Eat itself -> End game
+    		 int ret = JOptionPane.showConfirmDialog(null, "New game?", "Game Over", JOptionPane.YES_NO_OPTION);
+    		 if(ret == JOptionPane.YES_OPTION){
+    			 this.newGame();
+    			 return;
+    		 } else {
+    			 System.exit(0);
+    		 }
+    	 }
     	 map[head.x][head.y] = 8;						//Put the new head
     	 if(eatSth){
     		 addFood();
@@ -169,11 +180,29 @@ public class SnakeMap extends JPanel implements KeyListener, Runnable{
 		// TODO Auto-generated method stub
 		
 	}
+	
+	public void setPause(){
+		isPaused = !isPaused;
+	}
+	
+	public void newGame(){
+		 this.direction = 1;
+    	 this.head = new Point(size/2, size/2);
+    	 this.tail = new Point(size/2, (size/2)+1);
+    	 for(int x = 0; x < size; x++){
+    		 for(int y = 0; y < size; y++){
+    			 map[x][y] = 0;;
+    		 }
+    	 }
+    	 map[head.x][head.y] = 8;
+    	 map[tail.x][tail.y] = direction;
+    	 this.addFood();
+	}
 
 	@Override
 	public void run() {
 		while(isRunning){
-			this.step();
+			if(!isPaused) this.step();
 			try{
 				Thread.sleep(250);
 			} catch (Exception e){
