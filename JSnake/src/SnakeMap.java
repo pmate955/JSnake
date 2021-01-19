@@ -1,215 +1,195 @@
-import java.awt.Color;
-import java.awt.Graphics;
-import java.awt.Point;
+import javax.swing.*;
+import java.awt.*;
 import java.awt.event.KeyEvent;
 import java.awt.event.KeyListener;
 import java.util.concurrent.ThreadLocalRandom;
 
-import javax.swing.JOptionPane;
-import javax.swing.JPanel;
+/**
+ * JSnake made by Mate Pinter
+ * 2017.07.28
+ */
 
-public class SnakeMap extends JPanel implements KeyListener, Runnable{
-     /**
-	 * JSnake made by MAte Pinter 
-	 * 2017.07.28
-	 */
-	private static final long serialVersionUID = 2907709694278207308L;
-	private int[][] map;
-     private Point head;
-     private Point tail;
-     private byte direction;
-     private int size;
-     private int pointSize = 10;
-     public boolean isRunning = true;
-     public Thread gameThread;
-     public int score;
-     public boolean isPaused = false;
-     
-     public SnakeMap(int size){
-    	 this.size = size;
-    	 this.score = 0;
-    	 this.map = new int[size][size];
-    	 this.direction = 1;
-    	 this.head = new Point(size/2, size/2);
-    	 this.tail = new Point(size/2, (size/2)+1);
-    	 for(int x = 0; x < size; x++){
-    		 for(int y = 0; y < size; y++){
-    			 map[x][y] = 0;;
-    		 }
-    	 }
-    	 map[head.x][head.y] = 8;
-    	 map[tail.x][tail.y] = direction;
-    	 addKeyListener(this);
-    	 addFood();
-    	 gameThread = new Thread(this, "Update");
-     }
-     
-     public void paintComponent(Graphics g){
-    	 	super.paintComponent(g);
-    	 	for(int y = 0; y < size; y++){
-    	 		for(int x = 0; x < size; x++){
-    	 			int col = map[x][y];
-    	 			if(col!=0){
-    	 				if(col > 0 && col <= 4) g.setColor(Color.blue);
-    	 				else if(col == 8) g.setColor(Color.BLACK);
-    	 				else if(col == 10) g.setColor(Color.RED);
-    	 				g.fillRect(pointSize + (x*pointSize), pointSize + (y*pointSize), pointSize, pointSize);
-    	 			}
-    	 		}
-    	 	}
-    	 	g.setColor(Color.GRAY);
-            for (int i=0; i<=size; i++) {
-                g.drawLine(((i*pointSize)+pointSize), pointSize, (i*pointSize)+pointSize, pointSize + (pointSize*size));
+public class SnakeMap extends JPanel implements KeyListener, Runnable, MapConfig {
+
+    private Snake snake;
+    private Cell[][] map;
+    private int size;
+    private int pointSize;
+    private boolean isRunning;
+    private Thread gameThread;
+    private int score;
+    private boolean isPaused;
+
+    public SnakeMap(int size) {
+        this.pointSize = 10;
+        this.isRunning = true;
+        this.isPaused = false;
+        this.size = size;
+        this.score = 0;
+        this.map = new Cell[size][size];
+        init();
+        addKeyListener(this);
+        this.gameThread = new Thread(this, "Update");
+    }
+
+    public void init() {
+        Point head = new Point(size / 2, size / 2);
+        Point tail = new Point(size / 2, (size / 2) + 1);
+        this.snake = new Snake(head, tail, Cell.UP);
+        for (int x = 0; x < size; x++) {
+            for (int y = 0; y < size; y++) {
+                map[x][y] = Cell.EMPTY;
             }
-            for (int i=0; i<size; i++) {
-                g.drawLine(pointSize, ((i*pointSize)+pointSize), pointSize*(size+1), ((i*pointSize)+pointSize));
+        }
+        map[snake.getHead().x][snake.getHead().y] = Cell.HEAD;
+        map[snake.getTail().x][snake.getTail().y] = snake.getDirection();
+        addFood();
+    }
+
+    public void paintComponent(Graphics g) {
+        super.paintComponent(g);
+        drawSnake(g);
+        drawMap(g);
+    }
+
+    private void drawMap(Graphics g) {
+        g.setColor(Color.GRAY);
+        for (int i = 0; i <= size; i++) {
+            g.drawLine(((i * pointSize) + pointSize), pointSize, (i * pointSize) + pointSize, pointSize + (pointSize * size));
+        }
+        for (int i = 0; i < size; i++) {
+            g.drawLine(pointSize, ((i * pointSize) + pointSize), pointSize * (size + 1), ((i * pointSize) + pointSize));
+        }
+    }
+
+    private void drawSnake(Graphics g) {
+        for (int y = 0; y < size; y++) {
+            for (int x = 0; x < size; x++) {
+                Cell cell = map[x][y];
+                if (cell != Cell.EMPTY) {
+                    if (cell.isDirection()) g.setColor(Color.BLUE);
+                    else if (cell == Cell.HEAD) g.setColor(Color.BLACK);
+                    else if (cell == Cell.FOOD) g.setColor(Color.RED);
+                    int rectX = pointSize + (x * pointSize);
+                    int rectY = pointSize + (y * pointSize);
+                    g.fillRect(rectX, rectY, pointSize, pointSize);
+                }
             }
-     }
-     
-     public void printMap(){
-    	 for(int y = 0; y < size; y++){
-    		 for(int x = 0; x < size; x++){
-    			 System.out.print(map[x][y] + " ");
-    		 }
-    		 System.out.println(" ");
-    	 }
-     }
-          
-     public void step(){
-    	 boolean eatSth = false;
-    	 map[head.x][head.y] = direction;				//Move the head
-    	 if(direction == 1){							//Go up
-    		 if(head.y > 0){
-    			head.y = head.y-1;
-    		 } else {
-    		    head.y = size-1;
-    		 }
-    	 } else if(direction == 2){						//Go right
-    		 if(head.x<size-1){
-    			 head.x++;
-    		 } else {
-    			 head.x = 0;
-    		 }
-    	 } else if(direction == 3){						//Go down
-    		 if(head.y<size-1){
-    			 head.y++;
-    		 } else {
-    			 head.y = 0;
-    		 }
-    	 } else if(direction == 4){						//Go left
-    		 if(head.x>0){
-    			 head.x--;
-    		 } else {
-    			 head.x = size-1;
-    		 }
-    	 }
-    	 if(map[head.x][head.y]==10) eatSth = true;			//Found food
-    	 else if(map[head.x][head.y] != 0) {				//Eat itself -> End game
-    		 int ret = JOptionPane.showConfirmDialog(null, "New game?", "Game Over", JOptionPane.YES_NO_OPTION);
-    		 if(ret == JOptionPane.YES_OPTION){
-    			 this.newGame();
-    			 return;
-    		 } else {
-    			 System.exit(0);
-    		 }
-    	 }
-    	 map[head.x][head.y] = 8;						//Put the new head
-    	 if(eatSth){
-    		 addFood();
-    		 repaint();
-    		 return;
-    	 }
-    	 int lastDir = map[tail.x][tail.y];
-    	 map[tail.x][tail.y] = 0;						//Delete the last tail
-    	 if(lastDir == 1){
-    		 if(tail.y > 0) tail.y--;
-    		 else tail.y = size-1;
-    	 } else if(lastDir == 2){
-    		 if(tail.x < size-1) tail.x++;
-    		 else tail.x = 0;
-    	 } else if(lastDir == 3){
-    		 if(tail.y < size-1) tail.y++;
-    		 else tail.y = 0;
-    	 } else if(lastDir == 4){
-    		 if(tail.x>0) tail.x--;
-    		 else tail.x = size-1;
-    	 }
-    	 
-    	 repaint();
-     }
-     
-     private void addFood(){
-    	 int x = ThreadLocalRandom.current().nextInt(0, size);
-    	 int y = ThreadLocalRandom.current().nextInt(0, size);
-    	 while(map[x][y]!=0){
-    		 x = ThreadLocalRandom.current().nextInt(0, size);
-    		 y = ThreadLocalRandom.current().nextInt(0, size);
-    	 }
-    	 map[x][y] = 10;
-     }
-     
-     public void setDirection(byte direction){
-    	 this.direction = direction;
-    	 if(direction == 1){
-    		 System.out.println("Go Up");
-    	 } else if(direction == 2){
-    		 System.out.println("Go right");
-    	 } else if(direction == 3){
-    		 System.out.println("Go down");
-    	 } else System.out.println("Go left");
-     }
+        }
+    }
 
-	@Override
-	public void keyPressed(KeyEvent arg0) {
-		int keyCode = arg0.getKeyCode();
-		if(keyCode == KeyEvent.VK_UP && direction != 3) this.direction = 1;
-		else if(keyCode == KeyEvent.VK_RIGHT && direction != 4) this.direction = 2;
-		else if(keyCode == KeyEvent.VK_DOWN && direction != 1) this.direction = 3;
-		else if(keyCode == KeyEvent.VK_LEFT && direction != 2) this.direction = 4;
-		else if(keyCode == KeyEvent.VK_SPACE) this.step();
-	}
+    public void step() {
+        moveHead();
+        boolean foundFood = false;
+        Point head = snake.getHead();
+        if (map[head.x][head.y] == Cell.FOOD) {
+            foundFood = true;
+            score += 10;
+        }
+        if (foundFood) {
+            addFood();
+        } else {
+            moveTail();
+            if (map[head.x][head.y] != Cell.EMPTY) {
+                showNewGameDialog();
+            }
+        }
+        map[head.x][head.y] = Cell.HEAD;
+        repaint();
+    }
 
-	@Override
-	public void keyReleased(KeyEvent arg0) {
-		// TODO Auto-generated method stub
-		
-	}
+    private void showNewGameDialog() {
+        int option = JOptionPane.showConfirmDialog(null, " Score: " + score + " New game?", "Game Over", JOptionPane.YES_NO_OPTION);
+        if (option == JOptionPane.YES_OPTION) {
+            this.init();
+        } else {
+            System.exit(0);
+        }
+    }
 
-	@Override
-	public void keyTyped(KeyEvent arg0) {
-		// TODO Auto-generated method stub
-		
-	}
-	
-	public void setPause(){
-		isPaused = !isPaused;
-	}
-	
-	public void newGame(){
-		 this.direction = 1;
-    	 this.head = new Point(size/2, size/2);
-    	 this.tail = new Point(size/2, (size/2)+1);
-    	 for(int x = 0; x < size; x++){
-    		 for(int y = 0; y < size; y++){
-    			 map[x][y] = 0;;
-    		 }
-    	 }
-    	 map[head.x][head.y] = 8;
-    	 map[tail.x][tail.y] = direction;
-    	 this.addFood();
-	}
+    private void moveTail() {
+        Point tail = snake.getTail();
+        Cell cell = map[tail.x][tail.y];
+        map[tail.x][tail.y] = Cell.EMPTY;
+        if (cell == Cell.UP) {
+            tail.y = (tail.y > 0 ? tail.y - 1 : size - 1);
+        } else if (cell == Cell.RIGHT) {
+            tail.x = (tail.x < size - 1 ? tail.x + 1 : 0);
+        } else if (cell == Cell.DOWN) {
+            tail.y = (tail.y < size - 1 ? tail.y + 1 : 0);
+        } else if (cell == Cell.LEFT) {
+            tail.x = (tail.x > 0 ? tail.x - 1 : size - 1);
+        }
+    }
 
-	@Override
-	public void run() {
-		while(isRunning){
-			if(!isPaused) this.step();
-			try{
-				Thread.sleep(250);
-			} catch (Exception e){
-				
-			}
-		}
-		
-	}
-     
+    private void moveHead() {
+        Point head = snake.getHead();
+        Cell direction = snake.getDirection();
+        map[head.x][head.y] = snake.getDirection();
+        if (direction == Cell.UP) {
+            head.y = (head.y > 0 ? head.y - 1 : size - 1);
+        } else if (direction == Cell.RIGHT) {
+            head.x = (head.x < size - 1 ? head.x + 1 : 0);
+        } else if (direction == Cell.DOWN) {
+            head.y = (head.y < size - 1 ? head.y + 1 : 0);
+        } else if (direction == Cell.LEFT) {
+            head.x = (head.x > 0 ? head.x - 1 : size - 1);
+        }
+    }
+
+    private void addFood() {
+        int x;
+        int y;
+        do {
+            x = ThreadLocalRandom.current().nextInt(0, size);
+            y = ThreadLocalRandom.current().nextInt(0, size);
+        } while (map[x][y] != Cell.EMPTY);
+        map[x][y] = Cell.FOOD;
+    }
+
+    @Override
+    public void keyPressed(KeyEvent keyEvent) {
+        int keyCode = keyEvent.getKeyCode();
+        Cell direction = snake.getDirection();
+        if (keyCode == KeyEvent.VK_UP && direction != Cell.DOWN) snake.setDirection(Cell.UP);
+        else if (keyCode == KeyEvent.VK_RIGHT && direction != Cell.LEFT) snake.setDirection(Cell.RIGHT);
+        else if (keyCode == KeyEvent.VK_DOWN && direction != Cell.UP) snake.setDirection(Cell.DOWN);
+        else if (keyCode == KeyEvent.VK_LEFT && direction != Cell.RIGHT) snake.setDirection(Cell.LEFT);
+        else if (keyCode == KeyEvent.VK_SPACE) this.step();
+    }
+
+    @Override
+    public void keyReleased(KeyEvent arg0) {
+    }
+
+    @Override
+    public void keyTyped(KeyEvent arg0) {
+    }
+
+    public void changePause() {
+        isPaused = !isPaused;
+    }
+
+    @Override
+    public void run() {
+        while (isRunning) {
+            if (!isPaused) {
+                this.step();
+            }
+            try {
+                Thread.sleep(250);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+        }
+
+    }
+
+    public void setRunning(boolean running) {
+        isRunning = running;
+    }
+
+    public void startThread() {
+        this.gameThread.start();
+    }
 }
